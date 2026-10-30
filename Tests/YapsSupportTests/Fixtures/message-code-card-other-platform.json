@@ -1,0 +1,1 @@
+{"id":"msg_9","conversationId":"cnv_1","seq":9,"author":{"type":"agent","id":"usr_3","name":"Frederick"},"kind":"card","text":"Here's your code.","attachments":[],"card":{"type":"code","title":"Student discount","code":"STUDENT20","campaignId":"cmp_1","platform":"ios","buttonLabel":"Redeem","available":false,"openedAt":null},"createdAt":"2026-10-30T09:49:00.000Z"}

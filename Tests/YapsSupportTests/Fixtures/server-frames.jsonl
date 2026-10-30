@@ -1,0 +1,8 @@
+{"t":"welcome","conversationId":"cnv_1","lastSeq":2}
+{"t":"msg","m":{"id":"msg_2","conversationId":"cnv_1","seq":2,"author":{"type":"agent","name":"Frederick"},"kind":"text","text":"Yes!","attachments":[],"createdAt":"2026-10-30T09:42:10.000Z"}}
+{"t":"ack","cid":"01JD8Z6Q0000000000000000AA","m":{"id":"msg_1","conversationId":"cnv_1","seq":1,"clientId":"01JD8Z6Q0000000000000000AA","author":{"type":"customer"},"kind":"text","text":"is there a dark mode?","attachments":[],"createdAt":"2026-10-30T09:41:00.000Z"}}
+{"t":"state","agentTyping":true}
+{"t":"state","agentReadSeq":1}
+{"t":"err","code":"rate_limited","cid":"01JD8Z6Q0000000000000000AC"}
+{"t":"pong"}
+{"t":"some_future_frame","x":1}

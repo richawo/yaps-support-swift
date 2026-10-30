@@ -1,0 +1,1 @@
+{"id":"msg_6","conversationId":"cnv_1","seq":6,"author":{"type":"agent","id":"usr_3"},"kind":"card","text":"Book a call with us","attachments":[],"card":{"type":"calendar","buttonLabel":"Pick a time","available":true},"createdAt":"2026-10-30T09:46:00.000Z"}

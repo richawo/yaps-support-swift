@@ -1,0 +1,36 @@
+name: YapsSupportExample
+options:
+  bundleIdPrefix: ai.yaps.support
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+packages:
+  YapsSupport:
+    path: ..
+targets:
+  YapsSupportExample:
+    type: application
+    platform: iOS
+    sources:
+      - YapsSupportExample
+    dependencies:
+      - package: YapsSupport
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.yaps.support.example
+        SWIFT_VERSION: "6.0"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Clucky
+        INFOPLIST_KEY_NSCameraUsageDescription: Attach a photo to a support message.
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        CODE_SIGNING_ALLOWED: NO
+schemes:
+  YapsSupportExample:
+    build:
+      targets:
+        YapsSupportExample: all
+    run:
+      config: Debug

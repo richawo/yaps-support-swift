@@ -1,0 +1,1 @@
+{"id":"msg_4","conversationId":"cnv_1","seq":4,"author":{"type":"agent","id":"usr_3","name":"Frederick"},"kind":"card","text":"Yearly is 40% off right now, want it?","attachments":[],"card":{"type":"offer","title":"Yearly 40% off","buttonLabel":"View offer","paywallId":"yearly_offer","available":true,"openedAt":null},"createdAt":"2026-10-30T09:44:00.000Z"}
