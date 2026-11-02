@@ -1,0 +1,1 @@
+{"id":"msg_12","conversationId":"cnv_1","seq":12,"author":{"type":"agent","id":"usr_3","name":"Frederick"},"kind":"card","text":"Turn on notifications for Wakely here.","attachments":[],"card":{"type":"link","buttonLabel":"Open settings","linkId":"lnk_2","target":"app_settings","available":true,"openedAt":null},"createdAt":"2026-10-30T09:52:00.000Z"}

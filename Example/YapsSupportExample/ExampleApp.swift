@@ -3,7 +3,7 @@ import UIKit
 import UserNotifications
 @_spi(Preview) import YapsSupport
 
-/// A small "Clucky" alarm app showing the usual entry point: a Settings row with an unread badge.
+/// A small "Wakely" alarm app showing the usual entry point: a Settings row with an unread badge.
 ///
 /// Launch arguments:
 /// - `-YapsSupportPreview` uses a canned conversation instead of the network.
@@ -43,6 +43,10 @@ struct ExampleApp: App {
                                                       products: [.init(id: "pro_yearly", price: "$29.99", period: "P1Y")])]
         YapsSupport.shared.onPaywall = { id in
             print("Present paywall \(id)")
+        }
+        YapsSupport.shared.screens = [SupportScreen(id: "edit_profile", title: "Edit profile")]
+        YapsSupport.shared.onScreen = { id in
+            print("Show screen \(id)")
         }
         YapsSupport.shared.onEvent = { event in
             print("Support event: \(event)")

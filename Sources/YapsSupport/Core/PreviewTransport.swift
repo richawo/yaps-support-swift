@@ -6,7 +6,7 @@ import UIKit
 /// only through `@_spi(Preview)`.
 final class PreviewTransport: HTTPTransport, @unchecked Sendable {
     private let lock = NSLock()
-    private var seq = 10
+    private var seq = 11
     private let imageURL: String
     private let iconURL: String
 
@@ -31,10 +31,10 @@ final class PreviewTransport: HTTPTransport, @unchecked Sendable {
             ["id": "msg_5", "seq": 5, "author": ["type": "customer"], "text": "That fixed it. Max volume at 6:30 this morning.", "createdAt": Self.iso(9)],
             ["id": "msg_6", "seq": 6, "author": ["type": "customer"], "text": "Thanks Frederick!", "createdAt": Self.iso(9)],
             ["id": "msg_7", "seq": 7, "kind": "card", "author": agent,
-             "text": "Glad it’s sorted. If Clucky got you up on time, a quick rating helps a small team a lot.", "createdAt": Self.iso(4),
-             "card": ["type": "review", "buttonLabel": "Rate Clucky", "url": "https://apps.apple.com/app/id6450000000?action=write-review", "available": true]],
+             "text": "Glad it’s sorted. If Wakely got you up on time, a quick rating helps a small team a lot.", "createdAt": Self.iso(4),
+             "card": ["type": "review", "buttonLabel": "Rate Wakely", "url": "https://apps.apple.com/app/id6450000000?action=write-review", "available": true]],
             ["id": "msg_8", "seq": 8, "kind": "card", "author": agent, "text": "And since you asked about the yearly plan earlier:", "createdAt": Self.iso(3),
-             "card": ["type": "offer", "title": "Clucky Pro, yearly · 40% off", "buttonLabel": "See the offer", "paywallId": "yearly_offer", "available": true]],
+             "card": ["type": "offer", "title": "Wakely Pro, yearly · 40% off", "buttonLabel": "See the offer", "paywallId": "yearly_offer", "available": true]],
             ["id": "msg_9", "seq": 9, "kind": "card", "author": agent, "text": "You mentioned exams. Our flashcard app might help too.", "createdAt": Self.iso(2),
              "card": ["type": "app", "title": "Stacked", "body": "Flashcards that plan your revision for you.", "buttonLabel": "Get it",
                       "iconUrl": iconURL, "promotedAppId": "app_2", "appStoreId": "6450000001",
@@ -44,6 +44,10 @@ final class PreviewTransport: HTTPTransport, @unchecked Sendable {
                       "campaignId": "cmp_1", "platform": "ios", "buttonLabel": "Redeem",
                       "url": "https://apps.apple.com/redeem?ctx=offercodes&id=6450000000&code=STUDENT20",
                       "expiresAt": WireJSON.formatDate(Date().addingTimeInterval(60 * 86_400)), "available": true]],
+            ["id": "msg_11", "seq": 11, "kind": "card", "author": agent,
+             "text": "Our guide covers the other reasons an alarm can go quiet.", "createdAt": Self.iso(0.5),
+             "card": ["type": "link", "buttonLabel": "Read the guide", "linkId": "lnk_1", "target": "url",
+                      "url": "https://wakely.app/guide/silent-alarms", "available": true]],
         ].map { message in
             var message = message
             message["conversationId"] = "cnv_1"
@@ -51,13 +55,13 @@ final class PreviewTransport: HTTPTransport, @unchecked Sendable {
             message["attachments"] = message["attachments"] ?? []
             return message
         }
-        return ["conversation": ["id": "cnv_1", "status": "open", "lastSeq": 10, "customerReadSeq": 10, "agentReadSeq": 6, "unread": 0,
+        return ["conversation": ["id": "cnv_1", "status": "open", "lastSeq": 11, "customerReadSeq": 11, "agentReadSeq": 6, "unread": 0,
                                  "createdAt": Self.iso(26)],
                 "messages": messages, "hasMore": false]
     }
 
     private let config: [String: Any] = [
-        "appId": "app_preview", "appName": "Clucky", "verifiedOnly": false, "blocked": false, "trackedEvents": [String](),
+        "appId": "app_preview", "appName": "Wakely", "verifiedOnly": false, "blocked": false, "trackedEvents": [String](),
         "translation": ["enabled": false], "teamDisplay": ["showNames": true, "showPhotos": true],
         "uploads": ["images": true, "files": true], "pollIntervalSeconds": 60,
     ]
@@ -172,7 +176,7 @@ extension YapsSupport {
             chat.seededAttachments = [
                 DraftAttachment(kind: .image, data: data, contentType: "image/jpeg", filename: "IMG_0412.jpg",
                                 width: 1200, height: 900, preview: preview),
-                DraftAttachment(kind: .file, data: Data(count: 48_200), contentType: "text/plain", filename: "clucky-alarm-debug.log"),
+                DraftAttachment(kind: .file, data: Data(count: 48_200), contentType: "text/plain", filename: "wakely-alarm-debug.log"),
             ]
             chat.draft = "Here’s the log from this morning"
         }

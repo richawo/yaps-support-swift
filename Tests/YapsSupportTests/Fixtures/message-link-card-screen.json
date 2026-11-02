@@ -1,0 +1,1 @@
+{"id":"msg_11","conversationId":"cnv_1","seq":11,"author":{"type":"agent","id":"usr_3","name":"Frederick"},"kind":"card","text":"You can change your email from your profile.","attachments":[],"card":{"type":"link","buttonLabel":"Edit profile","linkId":"lnk_3","target":"screen","screenId":"edit_profile","available":true,"openedAt":null},"createdAt":"2026-10-30T09:51:00.000Z"}

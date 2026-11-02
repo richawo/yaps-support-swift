@@ -37,9 +37,9 @@ enum SetupCheck {
 
     private static func hint(for error: SupportError) -> String {
         switch error.code {
-        case SupportError.unknownApp: return "The App ID doesn't exist. Copy it from the inbox under Settings."
+        case SupportError.unknownApp: return "The App ID doesn't exist. Copy it from the inbox under App settings."
         case SupportError.connectionFailed: return "Couldn't reach the server. Check the network and baseURL."
-        case SupportError.blocked: return "This device is blocked in the inbox."
+        case SupportError.blocked: return "This customer is blocked in the inbox."
         case SupportError.verificationRequired: return "The app only accepts verified users. Call identify(token:) first."
         case SupportError.rateLimited: return "Rate limited. Try again in a few seconds."
         default: return "See the Support Yaps docs for this error code."

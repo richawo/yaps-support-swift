@@ -134,6 +134,29 @@ public final class YapsSupport: ObservableObject {
         }
     }
 
+    // MARK: Screens
+
+    /// Screens in your app that link cards can open. Invalid or duplicate entries are dropped; at
+    /// most 50 are kept. They're reported to the inbox so the team can pick them.
+    public var screens: [SupportScreen] {
+        get { settings.screens }
+        set {
+            settings.screens = newValue
+            engine?.refreshScreens()
+        }
+    }
+
+    /// Called with the screen ID when the customer taps a link card for one of your `screens`,
+    /// after the SDK sheet has closed. Show the screen from here. Without it, those cards show as
+    /// unavailable.
+    public var onScreen: ((String) -> Void)? {
+        get { settings.onScreen }
+        set {
+            settings.onScreen = newValue
+            engine?.chat.screensChanged()
+        }
+    }
+
     // MARK: Internals
 
     let settings = HostSettings()
@@ -185,6 +208,9 @@ public final class YapsSupport: ObservableObject {
         engine.onUnreadChange = { [weak self] count in self?.unreadCount = count }
         engine.onChatVisibilityChange = { [weak self] open in self?.isChatOpen = open }
         engine.onDismissRequested = { [weak self] in self?.presenter.dismiss() }
+        engine.onDismissThen = { [weak self] completion in
+            if let self { self.presenter.dismiss(completion: completion) } else { completion() }
+        }
         engine.onOpenRequested = { [weak self] in self?.openChat() }
         engine.isChatOpen = { [weak self] in self?.isChatOpen ?? false }
         engine.onPaywallsChange = { [weak self] paywalls in self?.availablePaywalls = paywalls }
@@ -264,6 +290,33 @@ public final class YapsSupport: ObservableObject {
         requireEngine()?.track(name, opensChat: opensChat)
     }
 
+    // MARK: - Review prompt
+
+    /// The in-app review prompt that's due for this customer, or `nil`. Ask at a calm moment,
+    /// for example after a task finishes, and show it in your own UI.
+    public func reviewPrompt() async -> ReviewPrompt? {
+        await requireEngine()?.reviewPrompt()
+    }
+
+    /// Call right before you show the prompt. Returns `false` when another of the customer's
+    /// devices already showed this milestone, so they see it once.
+    public func claimReviewPrompt(_ prompt: ReviewPrompt) async -> Bool {
+        await requireEngine()?.reviewPromptAction("shown", milestone: prompt.milestone) ?? false
+    }
+
+    /// Opens the prompt's review page and records the tap. To use Apple's rating sheet instead,
+    /// call `AppStore.requestReview(in:)` yourself and then ``answerReviewPrompt(_:_:)``.
+    public func openReviewPrompt(_ prompt: ReviewPrompt) async {
+        guard let engine = requireEngine() else { return }
+        if engine.deps.systemIntegration { await UIApplication.shared.open(prompt.url) }
+        await engine.reviewPromptAction("opened", milestone: prompt.milestone)
+    }
+
+    /// Records the customer's answer to the prompt.
+    public func answerReviewPrompt(_ prompt: ReviewPrompt, _ answer: ReviewPromptAnswer) async {
+        await requireEngine()?.reviewPromptAction(answer.rawValue, milestone: prompt.milestone)
+    }
+
     // MARK: - Push
 
     /// Forwards the APNs device token from
@@ -325,6 +378,10 @@ public final class YapsSupport: ObservableObject {
     public static func openChat() { shared.openChat() }
     public static func closeChat() { shared.closeChat() }
     public static func track(_ name: String, opensChat: Bool = false) { shared.track(name, opensChat: opensChat) }
+    public static func reviewPrompt() async -> ReviewPrompt? { await shared.reviewPrompt() }
+    public static func claimReviewPrompt(_ prompt: ReviewPrompt) async -> Bool { await shared.claimReviewPrompt(prompt) }
+    public static func openReviewPrompt(_ prompt: ReviewPrompt) async { await shared.openReviewPrompt(prompt) }
+    public static func answerReviewPrompt(_ prompt: ReviewPrompt, _ answer: ReviewPromptAnswer) async { await shared.answerReviewPrompt(prompt, answer) }
 
     public static func setPushToken(_ token: Data, environment: PushEnvironment = .automatic) {
         shared.setPushToken(token, environment: environment)

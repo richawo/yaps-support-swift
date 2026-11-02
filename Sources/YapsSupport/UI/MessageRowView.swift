@@ -67,6 +67,7 @@ struct MessageRowView: View {
 
     @Environment(\.chatTheme) private var theme
     @Environment(\.supportStrings) private var strings
+    @Environment(\.openURL) private var openURL
     @ScaledMetric(relativeTo: .callout) private var avatarSize: CGFloat = ThreadMetrics.avatar
 
     private var row: ChatRow { item.row }
@@ -129,7 +130,7 @@ struct MessageRowView: View {
                 bubble
             }
             if let card = row.card {
-                CardView(card: card, action: { chat.openCard(row) }, copy: { chat.copyCode(row) })
+                CardView(card: card, action: { chat.openCard(row) }, copy: { chat.copyCode(row) }, rate: { chat.rateCard(row, score: $0) })
                     .padding(.top, row.text.isEmpty ? 0 : 2)
             }
         }
@@ -150,11 +151,14 @@ struct MessageRowView: View {
     }
 
     private var bubble: some View {
-        Text(verbatim: row.text)
+        let ink = row.isOutgoing ? theme.accentInk : theme.incomingForeground
+        let links = TextLinks.matches(in: row.text)
+        return Text(TextLinks.attributed(row.text, links: links, color: ink))
             .font(theme.bubbleFont)
             .tracking(-0.2)
             .lineSpacing(1)
-            .foregroundStyle(row.isOutgoing ? theme.accentInk : theme.incomingForeground)
+            .foregroundStyle(ink)
+            .tint(ink)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 14)
@@ -162,10 +166,16 @@ struct MessageRowView: View {
             .padding(.bottom, 10)
             .background { bubbleBackground }
             .contentShape(shape)
-            .onTapGesture { retryIfFailed() }
+            // Only failed bubbles take the tap, so links stay tappable everywhere else.
+            .gesture(TapGesture().onEnded { retryIfFailed() }, including: isFailed ? .all : .subviews)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)
             .accessibilityHint(isFailed ? Text(verbatim: strings("status.tapToRetry")) : Text(verbatim: ""))
+            .accessibilityActions {
+                ForEach(Array(links.enumerated()), id: \.offset) { _, link in
+                    Button(link.url.absoluteString) { openURL(link.url) }
+                }
+            }
     }
 
     @ViewBuilder
@@ -353,6 +363,8 @@ struct CardView: View {
     let action: () -> Void
     /// Code cards: copies the code and reports whether it was copied.
     var copy: () -> Bool = { false }
+    /// Rating cards: the star the customer tapped, 1–5.
+    var rate: (Int) -> Void = { _ in }
 
     var body: some View {
         switch card {
@@ -362,7 +374,49 @@ struct CardView: View {
             AppPromoCardView(promo: promo, action: action)
         case .code(let code):
             CodeCardView(code: code, redeem: action, copy: copy)
+        case .link(let link):
+            LinkCardView(link: link, action: action)
+        case .rating(let score):
+            RatingCardView(score: score, rate: rate)
         }
+    }
+}
+
+/// Rating card: five stars under the "How did we do?" bubble, then the thanks note. Tapping
+/// another star changes the score.
+struct RatingCardView: View {
+    let score: Int?
+    let rate: (Int) -> Void
+    @Environment(\.chatTheme) private var theme
+    @Environment(\.supportStrings) private var strings
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 2) {
+                ForEach(1...5, id: \.self) { n in
+                    Button { rate(n) } label: {
+                        Image(systemName: n <= (score ?? 0) ? "star.fill" : "star")
+                            .font(.system(size: 26, weight: .medium))
+                            .foregroundStyle(n <= (score ?? 0) ? theme.accent : Color.secondary.opacity(0.5))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.squish)
+                    .accessibilityLabel(Text(verbatim: strings.format("card.ratingStars", n)))
+                    .accessibilityAddTraits(n == score ? .isSelected : [])
+                }
+            }
+            .frame(maxWidth: .infinity)
+            if score != nil {
+                Text(verbatim: strings("card.ratingThanks"))
+                    .font(theme.font(.subheadline, weight: .semibold))
+                    .foregroundStyle(theme.incomingForeground)
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
+        }
+        .cardSurface()
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: score)
     }
 }
 
@@ -569,4 +623,23 @@ struct TypingIndicatorView: View {
 
 extension String {
     var nonEmpty: String? { isEmpty ? nil : self }
+}
+
+extension TextLinks {
+    /// The message text as literal characters, with each link underlined in the bubble's ink.
+    static func attributed(_ text: String, links: [Match], color: Color) -> AttributedString {
+        var result = AttributedString()
+        var last = text.startIndex
+        for link in links {
+            result += AttributedString(String(text[last..<link.range.lowerBound]))
+            var linked = AttributedString(String(text[link.range]))
+            linked.link = link.url
+            linked.swiftUI.foregroundColor = color
+            linked.swiftUI.underlineStyle = .single
+            result += linked
+            last = link.range.upperBound
+        }
+        result += AttributedString(String(text[last...]))
+        return result
+    }
 }

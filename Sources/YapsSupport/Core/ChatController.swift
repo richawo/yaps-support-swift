@@ -686,8 +686,56 @@ final class ChatController: ObservableObject {
             guard code.state == .available, let url = code.redeemURL else { return }
             engine.emit(.codeOpened)
             if engine.deps.systemIntegration { UIApplication.shared.open(url) }
+        case .link(let link):
+            guard link.available, let messageId = row.messageId else { return }
+            // Like every SDK: the event and the receipt follow a successful open.
+            let opened: @MainActor (Bool) -> Void = { [weak self] success in
+                guard let self, success else {
+                    Log.info("The link card's link couldn't be opened")
+                    return
+                }
+                engine.emit(.linkOpened(messageId: messageId, linkId: link.linkId))
+                sendActionReceipt("open", for: row)
+            }
+            switch link.target {
+            case .url(let url):
+                guard ChatPresentation.isAllowedLink(url) else { return }
+                openSystemURL(url, then: opened)
+            case .appSettings:
+                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                openSystemURL(url, then: opened)
+            case .screen(let id):
+                guard engine.isScreenAvailable(id) else { return }
+                engine.openScreen(id) { opened(true) }
+            }
+            return
+        case .rating:
+            return // stars call rateCard(_:score:)
         }
         sendActionReceipt("open", for: row)
+    }
+
+    /// A star on a rating card: shows the score at once and sends it. Tapping again changes it.
+    func rateCard(_ row: ChatRow, score: Int) {
+        guard case .rating? = row.card, (1...5).contains(score), let messageId = row.messageId,
+              var message = cache.messages.first(where: { $0.id == messageId }) else { return }
+        message.card?.rating = score
+        cache.merge([message])
+        saveCache()
+        rebuildRows()
+        Task {
+            try? await engine.authorized { token in
+                try await engine.api.sendVoid(.post, "/v1/sdk/actions/\(messageId)", body: RateRequest(score: score), token: token, retry: .standard)
+            }
+        }
+    }
+
+    /// Opens a URL and reports whether the system did (always true in unit tests).
+    private func openSystemURL(_ url: URL, then done: @escaping @MainActor (Bool) -> Void) {
+        guard engine.deps.systemIntegration else { return done(true) }
+        UIApplication.shared.open(url, options: [:]) { success in
+            Task { @MainActor in done(success) }
+        }
     }
 
     /// Copies a code card's code (allowed on any platform until it expires). Returns whether it
@@ -736,6 +784,8 @@ final class ChatController: ObservableObject {
 
     func paywallsChanged() { rebuildRows() }
 
+    func screensChanged() { rebuildRows() }
+
     /// The session was reset (logout, deletion, user switch, or a rejected device token).
     func sessionChanged(clearOutbox: Bool) {
         let wasLive = liveTask != nil || realtime != nil
@@ -782,6 +832,7 @@ final class ChatController: ObservableObject {
             showPhotos: teamDisplay?.showPhotos ?? true,
             uploadProgress: uploadProgress,
             isPaywallAvailable: { [engine] id in engine.isPaywallAvailable(id) },
+            isScreenAvailable: { [engine] id in engine.isScreenAvailable(id) },
             fileURL: { fileStore.url($0) },
             now: engine.deps.now()
         )

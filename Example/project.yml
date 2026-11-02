@@ -23,7 +23,7 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Clucky
+        INFOPLIST_KEY_CFBundleDisplayName: Wakely
         INFOPLIST_KEY_NSCameraUsageDescription: Attach a photo to a support message.
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         CODE_SIGNING_ALLOWED: NO

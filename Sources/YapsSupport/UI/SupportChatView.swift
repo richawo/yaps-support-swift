@@ -126,13 +126,18 @@ final class ChatPresenter {
         presented = controller
     }
 
-    func dismiss() {
+    /// Dismisses the sheet, then runs `completion` (right away when there's no sheet).
+    func dismiss(completion: (@MainActor () -> Void)? = nil) {
         if let observer = pendingObserver {
             NotificationCenter.default.removeObserver(observer)
             pendingObserver = nil
         }
-        guard let presented else { return }
-        presented.presentingViewController?.dismiss(animated: true)
+        guard let presented, let presenting = presented.presentingViewController else {
+            self.presented = nil
+            completion?()
+            return
+        }
+        presenting.dismiss(animated: true) { completion?() }
         self.presented = nil
     }
 

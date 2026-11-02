@@ -210,5 +210,5 @@ struct APIClient: Sendable {
 struct Empty: Codable, Sendable {}
 
 enum SDKInfo {
-    static let version = "1.0.0"
+    static let version = "2.0.0"
 }

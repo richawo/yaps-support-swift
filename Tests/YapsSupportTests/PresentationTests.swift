@@ -103,7 +103,7 @@ final class AppearancePrecedenceTests: XCTestCase {
         local.welcomeText = "Local text"
         let resolved = resolve(remote: remote, local: local)
         XCTAssertEqual(resolved.accent, .remote(ColorPair(light: "#FF7A45", dark: "#FF8A5B")))
-        XCTAssertEqual(resolved.title, "Clucky support")
+        XCTAssertEqual(resolved.title, "Wakely support")
         XCTAssertEqual(resolved.welcomeText, "We usually reply within a few hours.")
         XCTAssertEqual(resolved.fontDesign, .rounded)
         XCTAssertTrue(resolved.showsCloseButton)
@@ -128,9 +128,9 @@ final class AppearancePrecedenceTests: XCTestCase {
 
     func testRemoteTextFollowsLanguageThenEnglish() throws {
         let remote = try Fixtures.decode(RemoteAppearance.self, "appearance.json")
-        XCTAssertEqual(resolve(remote: remote, language: "es").title, "Soporte de Clucky")
-        XCTAssertEqual(resolve(remote: remote, language: "es-MX").title, "Soporte de Clucky")
-        XCTAssertEqual(resolve(remote: remote, language: "fr").title, "Clucky support")
+        XCTAssertEqual(resolve(remote: remote, language: "es").title, "Soporte de Wakely")
+        XCTAssertEqual(resolve(remote: remote, language: "es-MX").title, "Soporte de Wakely")
+        XCTAssertEqual(resolve(remote: remote, language: "fr").title, "Wakely support")
         XCTAssertEqual(resolve(remote: remote, language: "fr").welcomeTitle, "How can we help?")
     }
 
@@ -173,7 +173,7 @@ final class AppearancePrecedenceTests: XCTestCase {
 
         XCTAssertEqual(harness.engine.resolvedAppearance().title, "Help")
         await harness.engine.appearanceStore.refresh()
-        XCTAssertEqual(harness.engine.resolvedAppearance().title, "Clucky support")
+        XCTAssertEqual(harness.engine.resolvedAppearance().title, "Wakely support")
         let first = try XCTUnwrap(harness.transport.requests("GET", "/v1/sdk/appearance").first)
         XCTAssertEqual(first.header("X-Support-App"), "app_123")
         XCTAssertNil(first.header("Authorization"), "Appearance is public")
@@ -182,12 +182,12 @@ final class AppearancePrecedenceTests: XCTestCase {
         await harness.engine.appearanceStore.refresh()
         let second = try XCTUnwrap(harness.transport.requests("GET", "/v1/sdk/appearance").last)
         XCTAssertEqual(second.header("If-None-Match"), #"W/"a1""#)
-        XCTAssertEqual(harness.engine.resolvedAppearance().title, "Clucky support", "304 keeps the cached appearance")
+        XCTAssertEqual(harness.engine.resolvedAppearance().title, "Wakely support", "304 keeps the cached appearance")
 
         // The cache survives a relaunch.
         let relaunched = harness.makeEngine()
         relaunched.appearanceStore.load()
-        XCTAssertEqual(relaunched.resolvedAppearance().title, "Clucky support")
+        XCTAssertEqual(relaunched.resolvedAppearance().title, "Wakely support")
 
         harness.settings.usesRemoteAppearance = false
         XCTAssertEqual(harness.engine.resolvedAppearance().title, "Help")
@@ -366,6 +366,22 @@ final class UtilityTests: XCTestCase {
         XCTAssertEqual(result.count, 20)
         XCTAssertEqual(result.first, SupportPaywall(id: "yearly_offer", title: "Yearly 40% off"))
         XCTAssertFalse(result.contains { $0.id == "bad id" || $0.id == "no_title" })
+    }
+
+    func testScreenValidation() {
+        var screens = [SupportScreen(id: " edit_profile ", title: " Edit profile "),
+                       SupportScreen(id: "edit_profile", title: "Duplicate"),
+                       SupportScreen(id: "bad id", title: "Nope"),
+                       SupportScreen(id: "no_title", title: ""),
+                       SupportScreen(id: "long_title", title: String(repeating: "a", count: 61))]
+        for index in 0..<55 { screens.append(SupportScreen(id: "s\(index)", title: "Screen \(index)")) }
+        let result = Validation.screens(screens)
+        XCTAssertEqual(result.count, 50)
+        XCTAssertEqual(result.first, SupportScreen(id: "edit_profile", title: "Edit profile"))
+        XCTAssertFalse(result.contains { $0.id == "bad id" })
+        XCTAssertTrue(result.contains(SupportScreen(id: "no_title", title: "no_title")), "A blank title becomes the ID")
+        XCTAssertTrue(result.contains(SupportScreen(id: "long_title", title: String(repeating: "a", count: 60))), "Long titles are cut to 60")
+        XCTAssertEqual(result.last?.id, "s46")
     }
 
     func testIdentifierRule() {

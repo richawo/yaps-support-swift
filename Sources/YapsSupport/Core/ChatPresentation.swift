@@ -15,6 +15,27 @@ struct ChatRow: Identifiable, Equatable {
         case offer(paywallId: String, label: String?, title: String?, available: Bool)
         case app(AppPromo)
         case code(PromoCode)
+        case link(LinkButton)
+        /// "How did we do?": five stars; `score` once the customer has rated (§5 Rating card).
+        case rating(score: Int?)
+    }
+
+    /// One button that opens a web page, an email, phone or text link, the app's page in Settings,
+    /// or a screen in the host app (§5 Link card).
+    struct LinkButton: Equatable {
+        enum Target: Equatable {
+            /// Always `https:`, `mailto:`, `tel:` or `sms:`.
+            case url(URL)
+            case appSettings
+            case screen(id: String)
+        }
+
+        var label: String
+        var target: Target
+        /// False shows the button disabled with "No longer available".
+        var available: Bool
+        /// The saved link the card came from (nil for a one-off link), for `.linkOpened`.
+        var linkId: String? = nil
     }
 
     /// Another app from the same organisation (§5 App promo card).
@@ -134,6 +155,8 @@ enum ChatPresentation {
         var showPhotos: Bool = true
         var uploadProgress: [String: Double] = [:]
         var isPaywallAvailable: (String) -> Bool
+        /// Whether a link card's screen is registered and there's an `onScreen` handler.
+        var isScreenAvailable: (String) -> Bool = { _ in false }
         var fileURL: (String) -> URL
         /// Decides whether code cards have expired.
         var now: Date = Date()
@@ -153,6 +176,10 @@ enum ChatPresentation {
             return appPromo(for: card).map(ChatRow.CardContent.app)
         case .code:
             return promoCode(for: card, now: context.now).map(ChatRow.CardContent.code)
+        case .link:
+            return linkButton(for: card, isScreenAvailable: context.isScreenAvailable).map(ChatRow.CardContent.link)
+        case .rating:
+            return .rating(score: card.rating.flatMap { (1...5).contains($0) ? $0 : nil })
         case .unknown:
             return nil // rendered as plain text (§9)
         }
@@ -196,6 +223,34 @@ enum ChatPresentation {
         return ChatRow.PromoCode(code: code, title: card.title?.nonEmpty, body: card.body?.nonEmpty,
                                  label: card.buttonLabel?.nonEmpty, redeemURL: redeemURL, platform: platform,
                                  expiresAt: expiresAt, state: state)
+    }
+
+    /// Schemes a link card may open. Anything else is refused, whatever the server sent.
+    static let linkSchemes: Set<String> = ["https", "mailto", "tel", "sms"]
+
+    static func isAllowedLink(_ url: URL) -> Bool {
+        url.scheme.map { linkSchemes.contains($0.lowercased()) } ?? false
+    }
+
+    /// A link card needs a label and a target this SDK knows; a URL needs an allowed scheme and a
+    /// screen an ID. Anything else renders as plain text. A screen is available only when the
+    /// server says so, it's registered here and `onScreen` is set.
+    static func linkButton(for card: Card, isScreenAvailable: (String) -> Bool) -> ChatRow.LinkButton? {
+        guard let label = card.buttonLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty else { return nil }
+        let serverAvailable = card.available != false
+        switch card.target {
+        case "url":
+            guard let url = card.url.flatMap(URL.init(string:)), isAllowedLink(url) else { return nil }
+            return ChatRow.LinkButton(label: label, target: .url(url), available: serverAvailable, linkId: card.linkId)
+        case "app_settings":
+            return ChatRow.LinkButton(label: label, target: .appSettings, available: serverAvailable, linkId: card.linkId)
+        case "screen":
+            guard let id = card.screenId, !id.isEmpty else { return nil }
+            return ChatRow.LinkButton(label: label, target: .screen(id: id), available: serverAvailable && isScreenAvailable(id),
+                                      linkId: card.linkId)
+        default:
+            return nil
+        }
     }
 
     /// The next moment a visible code card expires, so the thread can redraw it then.
@@ -272,5 +327,23 @@ enum ChatPresentation {
         var rows = messages.filter(\.isDisplayable).map { row(for: $0, context: context) }
         rows += outbox.filter { !confirmed.contains($0.clientId) }.map { row(for: $0, context: context) }
         return rows
+    }
+}
+
+/// Tappable `http(s)` links in message text. Text is never read as Markdown or HTML: only bare
+/// URLs become links, without trailing punctuation (the Android SDK's pattern).
+enum TextLinks {
+    struct Match: Equatable {
+        var range: Range<String.Index>
+        var url: URL
+    }
+
+    private static let pattern = try! NSRegularExpression(pattern: #"https?://[^\s<>"']+[^\s<>"'.,;:!?)\]]"#)
+
+    static func matches(in text: String) -> [Match] {
+        pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { result in
+            guard let range = Range(result.range, in: text), let url = URL(string: String(text[range])) else { return nil }
+            return Match(range: range, url: url)
+        }
     }
 }

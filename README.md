@@ -9,20 +9,20 @@ open from your app, answered from the Support Yaps inbox, Telegram or the operat
   zh-Hant, id, vi, th
 - Live updates over a WebSocket while the chat is on screen, push notifications when it isn't
 - Photos (up to 5), camera, and PDF/TXT/ZIP/LOG files; messages survive going offline
-- Verified identity across devices; review, offer, app promo and code cards; automations from app
-  events
+- Verified identity across devices; review, offer, app promo, code and link cards; automations
+  from app events
 - A privacy manifest (`PrivacyInfo.xcprivacy`) ships inside the package
 
 ## Install
 
 **Xcode:** File → Add Package Dependencies…, enter `https://github.com/richawo/yaps-support-swift`,
-choose "Up to Next Major Version" from `1.0.0`, and add the `YapsSupport` library to your app target.
+choose "Up to Next Major Version" from `2.0.0`, and add the `YapsSupport` library to your app target.
 
 **Package.swift:**
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/richawo/yaps-support-swift", from: "1.0.0"),
+    .package(url: "https://github.com/richawo/yaps-support-swift", from: "2.0.0"),
 ],
 targets: [
     .target(name: "MyApp", dependencies: [.product(name: "YapsSupport", package: "yaps-support-swift")]),
@@ -61,8 +61,9 @@ struct SupportRow: View {
 }
 ```
 
-That's a working chat. The App ID is in the inbox under **Settings → your app**. Calling
-`configure` again with the same ID does nothing.
+That's a working chat. The App ID is in the inbox under **App settings**. Calling
+`configure` again with the same ID and base URL does nothing; a different ID or base URL starts a
+new session.
 
 ### Ways to show the chat
 
@@ -101,8 +102,8 @@ session automatically. Metadata allows 30 entries (keys `[A-Za-z0-9_.-]{1,64}`, 
 characters); invalid entries are logged and left out.
 
 `logout()` clears the device token, cached messages, drafts, pending sends and unread state, and
-closes the SDK sheet. Server history is kept. Your settings (appearance, handlers, paywalls) and the
-APNs token stay, so you don't need to re-forward the token.
+closes the SDK sheet. Server history is kept. Your settings (appearance, handlers, paywalls,
+screens) and the APNs token stay, so you don't need to re-forward the token.
 
 `deleteData()` deletes this device's registration and, if no other device belongs to the customer,
 their conversations and files. On failure it throws a `SupportError` and keeps the session so you
@@ -110,11 +111,11 @@ can retry.
 
 ## Identity verification
 
-Verified users are one person across all their devices, and across your other apps if you link
-them: every device that presents a valid token for the same `user_id` shares one customer and one
-conversation.
+Verified users are one person across all their devices in this app (App ID): every device that
+presents a valid token for the same `user_id` shares one customer and one conversation. Your other
+apps keep their own conversations; the inbox lists them under "Also uses".
 
-1. In the inbox, open **Settings → your app → Identity** and copy the identity secret (`ids_…`).
+1. In the inbox, open **App settings → Identity** and copy the identity secret (`ids_…`).
    Keep it on your server. **Never ship it in the app.**
 2. On your server, sign an HS256 JWT with the claims `user_id` (required), `exp` (required) and
    optionally `name`, `email`, `nbf`:
@@ -142,7 +143,7 @@ The SDK never asks for notification permission and never replaces your delegates
 own permission flow; the SDK forwards the token and recognises its own pushes.
 
 1. Add the **Push Notifications** capability. Upload your APNs key (`.p8`, Key ID, Team ID, Bundle
-   ID) in the inbox under **Settings → your app → Push**.
+   ID) in the inbox under **App settings → Push**.
 2. Register when permission is already granted, and forward the token:
 
 ```swift
@@ -217,7 +218,8 @@ YapsSupport.shared.refreshPaywalls(invalidate: true)
 Available paywalls are reported to the inbox (via `PATCH /v1/sdk/device`), so agents only pick ones
 this device can open. A card whose paywall isn't available, or with no `onPaywall` handler, shows as
 "No longer available". IDs are 1–64 characters of `[A-Za-z0-9_.-]`, titles up to 60; at most 20 are
-kept. The title and products are shown to agents only.
+kept. Agents see the title and products in the inbox; the offer card shows the title to the
+customer.
 
 Review cards open the App Store review page the agent's card carries. They never trigger the
 in-app rating prompt.
@@ -248,6 +250,44 @@ for your team's stats (`POST /v1/sdk/actions/:messageId`).
 Both cards follow your appearance, light and dark mode, Dynamic Type and right-to-left layouts,
 and are translated into all 22 languages. Card types the SDK doesn't know yet show as plain
 messages.
+
+## Link cards and screens
+
+Agents can send a link card: the message text with one button under it. The button opens
+
+- a web page, or an email, phone or text message link, with the system (`UIApplication.open`).
+  Only `https:`, `mailto:`, `tel:` and `sms:` links open; anything else is refused. The card is
+  tagged with where it goes (the site, address or number).
+- your app's page in Settings (`UIApplication.openSettingsURLString`), for example to turn
+  notifications back on. No code needed.
+- or a screen in your app that you register:
+
+```swift
+YapsSupport.shared.screens = [
+    SupportScreen(id: "edit_profile", title: "Edit profile"),
+    SupportScreen(id: "restore_purchases", title: "Restore purchases"),
+]
+YapsSupport.shared.onScreen = { screenID in
+    router.show(screenID)   // the SDK sheet has already closed
+}
+```
+
+Screens are reported to the inbox (via `PATCH /v1/sdk/device`, after registering and whenever you
+set `screens`), so agents only pick screens this device can open. IDs are 1–64 characters of
+`[A-Za-z0-9_.-]`, titles up to 60 (shown to your team only); at most 50 are kept, and invalid
+entries and repeats are dropped. Tapping a screen link closes the chat if the SDK presented it
+(as `closeChat()` does) and then calls `onScreen`; a `SupportChatView` you placed stays, so
+navigate from it yourself. A screen link shows as "No longer available" when the screen isn't in
+your current `screens` or there's no `onScreen` handler, and so does any link the server marks
+unavailable.
+
+Once the link opens (the system reports success, or `onScreen` is called) the SDK emits
+`linkOpened(messageId:linkId:)` and records it for your team's stats
+(`POST /v1/sdk/actions/:messageId`). A link that fails to open does neither.
+
+Links in ordinary messages are tappable too: bare `http://` and `https://` URLs, without trailing
+punctuation, underlined in the bubble's text colour. Message text is never read as Markdown or
+HTML, so `**this**` shows as typed.
 
 ## Automations
 
@@ -297,7 +337,7 @@ YapsSupport.logHandler = { level, line in MyLogger.log(level, line) }
 ```
 
 Events: `chatOpened`, `chatClosed`, `messageSent`, `messageReceived`, `imageSent`, `reviewOpened`,
-`paywallOpened`, `appPromoOpened`, `codeCopied`, `codeOpened`, `dataDeleted`,
+`paywallOpened`, `appPromoOpened`, `codeCopied`, `codeOpened`, `linkOpened`, `dataDeleted`,
 `identityRejected(SupportError)`. They never carry message text, codes or user identifiers, and
 log lines never contain message text, identity or metadata values, or tokens. Switch with a
 `default` case, since later SDK versions may add events.
@@ -322,7 +362,7 @@ log lines never contain message text, identity or metadata values, or tokens. Sw
 
 ## Example app
 
-`Example/` is a small SwiftUI "Clucky" app with a Settings row and an unread badge.
+`Example/` is a small SwiftUI "Wakely" app with a Settings row and an unread badge.
 
 ```sh
 cd sdk/ios/Example

@@ -304,3 +304,64 @@ struct CodeCardView: View {
         date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(strings.locale))
     }
 }
+
+/// One button under the message: a web page, email, call or text (tagged with where it goes), the
+/// app's page in Settings, or a screen in the app. Unavailable links grey out like offers.
+struct LinkCardView: View {
+    let link: ChatRow.LinkButton
+    let action: () -> Void
+
+    @Environment(\.supportStrings) private var strings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let destination = Self.destination(for: link.target) {
+                CardTag(icon: destination.icon, text: destination.text)
+                    .padding(.bottom, 12)
+            }
+
+            Button(action: action) {
+                CardActionLabel(text: link.available ? link.label : strings("card.unavailable"),
+                                symbol: link.available ? Self.symbol(for: link.target) : nil,
+                                enabled: link.available)
+            }
+            .buttonStyle(.squish)
+            .disabled(!link.available)
+            .accessibilityLabel(Text(verbatim: link.available ? link.label : "\(link.label), \(strings("card.unavailable"))"))
+            .accessibilityHint(Text(verbatim: Self.destination(for: link.target)?.text ?? ""))
+        }
+        .cardSurface()
+    }
+
+    // MARK: - Helpers (internal for tests)
+
+    /// Where a URL goes: the host for web pages (without `www.`), the address or number otherwise.
+    /// Settings and screens stay in the app, so they have no tag.
+    nonisolated static func destination(for target: ChatRow.LinkButton.Target) -> (icon: String, text: String)? {
+        guard case .url(let url) = target else { return nil }
+        switch url.scheme?.lowercased() {
+        case "https":
+            guard var host = url.host, !host.isEmpty else { return nil }
+            if host.lowercased().hasPrefix("www.") { host.removeFirst(4) }
+            return ("link", host.lowercased())
+        case "mailto", "tel", "sms":
+            // The decoded path: the address or number, without `?subject=` or `?body=`.
+            let address = URLComponents(url: url, resolvingAgainstBaseURL: false)?.path ?? ""
+            guard !address.isEmpty else { return nil }
+            switch url.scheme?.lowercased() {
+            case "mailto": return ("envelope.fill", address)
+            case "tel": return ("phone.fill", address)
+            default: return ("message.fill", address)
+            }
+        default:
+            return nil
+        }
+    }
+
+    nonisolated static func symbol(for target: ChatRow.LinkButton.Target) -> String {
+        switch target {
+        case .url, .appSettings: return "arrow.up.right"
+        case .screen: return "chevron.right"
+        }
+    }
+}

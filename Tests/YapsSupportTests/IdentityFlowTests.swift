@@ -40,7 +40,7 @@ final class IdentityFlowTests: XCTestCase {
 
         XCTAssertEqual(try harness.secureStore.read("app_123.deviceToken"), "dt_reg_1_secret", "Token goes to secure storage")
         XCTAssertEqual(engine.registrationId, "reg_1")
-        XCTAssertEqual(engine.config?.appName, "Clucky")
+        XCTAssertEqual(engine.config?.appName, "Wakely")
     }
 
     func testConcurrentCallersShareOneRegistration() async throws {
@@ -57,6 +57,35 @@ final class IdentityFlowTests: XCTestCase {
         let token = try await relaunched.ensureRegistered()
         XCTAssertEqual(token, "dt_reg_1_secret")
         XCTAssertEqual(harness.transport.requests("POST", "/v1/sdk/register").count, 1)
+    }
+
+    func testConfigIsReadAgainOnLaunchAndOnActivationAfterAMinute() async throws {
+        harness.transport.reset("POST", "/v1/sdk/register")
+        harness.stubRegister(config: ["blocked": true, "trackedEvents": []])
+        try await engine.ensureRegistered()
+        XCTAssertEqual(engine.config?.blocked, true)
+
+        // The organisation resubscribed and added an automation while the app was closed.
+        harness.transport.reset("PATCH", "/v1/sdk/device")
+        harness.transport.on("PATCH", "/v1/sdk/device", json: [
+            "customer": ["id": "cus_1", "verified": false],
+            "config": ["appId": "app_123", "verifiedOnly": false, "blocked": false, "trackedEvents": ["paywall_declined"]],
+        ])
+        let relaunched = harness.makeEngine()
+        XCTAssertEqual(relaunched.config?.blocked, true, "Cached config until the server answers")
+        await relaunched.foregroundSync()
+        let patches = harness.transport.requests("PATCH", "/v1/sdk/device")
+        XCTAssertEqual(patches.count, 1)
+        XCTAssertEqual(patches.first?.json?.count, 0, "Nothing changed on the device: an empty PATCH")
+        XCTAssertEqual(relaunched.config?.blocked, false)
+        XCTAssertEqual(relaunched.config?.trackedEvents, ["paywall_declined"])
+
+        await relaunched.foregroundSync()
+        XCTAssertEqual(harness.transport.requests("PATCH", "/v1/sdk/device").count, 1, "Fresh config isn't fetched again")
+        harness.clock.advance(61)
+        await relaunched.foregroundSync()
+        XCTAssertEqual(harness.transport.requests("PATCH", "/v1/sdk/device").count, 2)
+        relaunched.teardown()
     }
 
     func testDeviceUpdateSendsOnlyChangedFields() async throws {
@@ -105,6 +134,24 @@ final class IdentityFlowTests: XCTestCase {
         XCTAssertEqual(paywalls.map { $0["id"] as? String }, ["yearly_offer"])
         XCTAssertEqual((paywalls.first?["products"] as? [[String: String]])?.first,
                        ["id": "pro_yearly", "price": "$29.99", "period": "P1Y", "trial": "P1W"])
+    }
+
+    func testScreensAreReportedWhenTheyChange() async throws {
+        try await engine.ensureRegistered()
+        harness.settings.screens = [SupportScreen(id: "edit_profile", title: "Edit profile"),
+                                    SupportScreen(id: "bad id", title: "Dropped")]
+        engine.refreshScreens()
+        await engine.syncDevice()
+        let patch = try XCTUnwrap(harness.transport.requests("PATCH", "/v1/sdk/device").last?.json)
+        XCTAssertEqual(patch["screens"] as? [[String: String]], [["id": "edit_profile", "title": "Edit profile"]])
+        XCTAssertNil(engine.pendingDeviceUpdate(), "Unchanged screens aren't sent again")
+
+        harness.settings.screens = []
+        engine.refreshScreens()
+        XCTAssertEqual(engine.pendingDeviceUpdate()?.screens, [], "Removing every screen sends an empty list")
+        await engine.syncDevice()
+        XCTAssertEqual(harness.transport.requests("PATCH", "/v1/sdk/device").last?.json?["screens"] as? [[String: String]], [])
+        XCTAssertNil(engine.pendingDeviceUpdate())
     }
 
     func testUnauthorizedRegistersAgainAndRetries() async throws {

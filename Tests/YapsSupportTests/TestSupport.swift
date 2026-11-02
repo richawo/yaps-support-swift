@@ -141,7 +141,7 @@ final class EngineHarness {
     }
 
     func stubRegister(token: String = "dt_reg_1_secret", verified: Bool = false, config: [String: Any] = [:]) {
-        var cfg: [String: Any] = ["appId": "app_123", "appName": "Clucky", "verifiedOnly": false, "blocked": false,
+        var cfg: [String: Any] = ["appId": "app_123", "appName": "Wakely", "verifiedOnly": false, "blocked": false,
                                   "trackedEvents": ["paywall_declined"], "translation": ["enabled": true, "customerLanguage": "es"],
                                   "teamDisplay": ["showNames": true, "showPhotos": true], "uploads": ["images": true, "files": true],
                                   "pollIntervalSeconds": 60]

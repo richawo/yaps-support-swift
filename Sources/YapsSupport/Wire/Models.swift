@@ -53,8 +53,8 @@ struct Translation: Codable, Hashable, Sendable {
 }
 
 struct Card: Codable, Hashable, Sendable {
-    /// Raw card type. Known values are `review`, `offer`, `app` and `code`; anything else renders
-    /// as plain text.
+    /// Raw card type. Known values are `review`, `offer`, `app`, `code`, `link` and `rating`; anything else
+    /// renders as plain text.
     var type: String
     var title: String?
     /// Short supporting line (app pitch, campaign description).
@@ -76,13 +76,22 @@ struct Card: Codable, Hashable, Sendable {
     var platform: String?
     /// ISO 8601. Kept as a string so a malformed date never drops the whole card.
     var expiresAt: String?
+    /// Link card: the saved link, absent for one-off links.
+    var linkId: String?
+    /// Link card: `url`, `app_settings` or `screen`. Kept as a string so new targets render as text.
+    var target: String?
+    /// Link card with target `screen`: passed to `onScreen`.
+    var screenId: String?
     var available: Bool?
     var openedAt: String?
+    /// Rating card: the customer's score, 1–5, once they've rated.
+    var rating: Int?
 
     init(type: String, title: String? = nil, body: String? = nil, buttonLabel: String? = nil, url: String? = nil,
          paywallId: String? = nil, promotedAppId: String? = nil, appStoreId: String? = nil, iconUrl: String? = nil,
          installed: Bool? = nil, code: String? = nil, campaignId: String? = nil, platform: String? = nil,
-         expiresAt: String? = nil, available: Bool? = nil, openedAt: String? = nil) {
+         expiresAt: String? = nil, linkId: String? = nil, target: String? = nil, screenId: String? = nil,
+         available: Bool? = nil, openedAt: String? = nil, rating: Int? = nil) {
         self.type = type
         self.title = title
         self.body = body
@@ -97,11 +106,15 @@ struct Card: Codable, Hashable, Sendable {
         self.campaignId = campaignId
         self.platform = platform
         self.expiresAt = expiresAt
+        self.linkId = linkId
+        self.target = target
+        self.screenId = screenId
         self.available = available
         self.openedAt = openedAt
+        self.rating = rating
     }
 
-    enum Known: Equatable { case review, offer, app, code, unknown }
+    enum Known: Equatable { case review, offer, app, code, link, rating, unknown }
 
     var known: Known {
         switch type {
@@ -109,6 +122,8 @@ struct Card: Codable, Hashable, Sendable {
         case "offer": return .offer
         case "app": return .app
         case "code": return .code
+        case "link": return .link
+        case "rating": return .rating
         default: return .unknown
         }
     }
@@ -314,6 +329,11 @@ struct PaywallInput: Codable, Hashable, Sendable {
     var products: [Product]?
 }
 
+struct ScreenInput: Codable, Hashable, Sendable {
+    var id: String
+    var title: String
+}
+
 struct RegisterRequest: Encodable, Sendable {
     var platform: String = "ios"
     var device: DeviceInfo
@@ -343,12 +363,14 @@ struct DeviceUpdateRequest: Encodable, Sendable {
     var device: DeviceInfo?
     var badgeEnabled: Bool?
     var paywalls: [PaywallInput]?
+    var screens: [ScreenInput]?
 
     var isEmpty: Bool {
         identity == nil && metadata == nil && push == nil && device == nil && badgeEnabled == nil && paywalls == nil
+            && screens == nil
     }
 
-    enum CodingKeys: String, CodingKey { case identity, metadata, push, device, badgeEnabled, paywalls }
+    enum CodingKeys: String, CodingKey { case identity, metadata, push, device, badgeEnabled, paywalls, screens }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -362,6 +384,7 @@ struct DeviceUpdateRequest: Encodable, Sendable {
         try c.encodeIfPresent(device, forKey: .device)
         try c.encodeIfPresent(badgeEnabled, forKey: .badgeEnabled)
         try c.encodeIfPresent(paywalls, forKey: .paywalls)
+        try c.encodeIfPresent(screens, forKey: .screens)
     }
 }
 
@@ -440,6 +463,24 @@ struct TrackRequest: Codable, Sendable {
 
 struct TrackResponse: Codable, Sendable {
     var openChat: Bool?
+}
+
+struct RateRequest: Encodable, Sendable {
+    var action = "rate"
+    var score: Int
+}
+
+struct ReviewPromptResponse: Decodable, Sendable {
+    var prompt: ReviewPrompt?
+}
+
+struct ReviewPromptActionRequest: Encodable, Sendable {
+    var action: String
+    var milestone: Int
+}
+
+struct ReviewPromptActionResponse: Decodable, Sendable {
+    var claimed: Bool?
 }
 
 struct ErrorEnvelope: Codable, Sendable {

@@ -12,8 +12,9 @@ final class FixtureDecodingTests: XCTestCase {
     func testEveryFixtureIsBundled() {
         let expected = ["appearance.json", "conversation-response.json", "error-rate-limited.json",
                         "message-agent-translated.json", "message-app-card.json", "message-code-card-other-platform.json",
-                        "message-code-card.json", "message-image.json", "message-offer-card.json",
-                        "message-review-card.json", "message-text.json", "message-unknown-card.json",
+                        "message-code-card.json", "message-image.json", "message-link-card-screen.json",
+                        "message-link-card-settings.json", "message-link-card.json", "message-offer-card.json",
+                        "message-review-card.json", "message-text-link.json", "message-text.json", "message-unknown-card.json",
                         "push-apns.json", "push-fcm-data.json", "register-response.json", "server-frames.jsonl"]
         XCTAssertEqual(Set(Fixtures.names), Set(expected))
     }
@@ -41,7 +42,7 @@ final class FixtureDecodingTests: XCTestCase {
 
     func testEveryMessageFixtureDecodes() throws {
         let messageFixtures = Fixtures.names.filter { $0.hasPrefix("message-") }
-        XCTAssertEqual(messageFixtures.count, 9)
+        XCTAssertEqual(messageFixtures.count, 13)
         for name in messageFixtures {
             let message = try Fixtures.decode(Message.self, name)
             XCTAssertFalse(message.id.isEmpty, name)
@@ -159,7 +160,7 @@ final class FixtureDecodingTests: XCTestCase {
         XCTAssertEqual(response.deviceToken, "dt_reg_8f2k_example")
         XCTAssertEqual(response.registrationId, "reg_8f2k")
         XCTAssertEqual(response.customer.verified, false)
-        XCTAssertEqual(response.config.appName, "Clucky")
+        XCTAssertEqual(response.config.appName, "Wakely")
         XCTAssertEqual(response.config.trackedEvents, ["paywall_declined"])
         XCTAssertEqual(response.config.translation?.customerLanguage, "es")
         XCTAssertEqual(response.config.pollIntervalSeconds, 60)
@@ -170,7 +171,7 @@ final class FixtureDecodingTests: XCTestCase {
     func testAppearanceFixture() throws {
         let appearance = try Fixtures.decode(RemoteAppearance.self, "appearance.json")
         XCTAssertEqual(appearance.colors?.accent, ColorPair(light: "#FF7A45", dark: "#FF8A5B"))
-        XCTAssertEqual(appearance.title?["es"], "Soporte de Clucky")
+        XCTAssertEqual(appearance.title?["es"], "Soporte de Wakely")
         XCTAssertEqual(appearance.fontStyle, "rounded")
         XCTAssertEqual(appearance.cornerStyle, "round")
         XCTAssertEqual(appearance.showCloseButton, true)

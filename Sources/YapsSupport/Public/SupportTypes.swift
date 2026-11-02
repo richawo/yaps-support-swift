@@ -56,6 +56,31 @@ public struct SupportError: Error, Hashable, Sendable, CustomStringConvertible {
 }
 
 /// Something that happened in Support chat. Events never carry message bodies or user identifiers.
+/// The in-app review prompt that's due for this customer: their count of the app's prompt event
+/// reached a milestone they haven't put off or answered. Show it in your own UI.
+public struct ReviewPrompt: Hashable, Sendable, Decodable {
+    public let milestone: Int
+    /// How many times this customer has reported the prompt's event, across their devices.
+    public let count: Int
+    public let title: String
+    public let body: String
+    public let buttonLabel: String
+    /// The review page for this device: the App Store write-review page, or the app's own link.
+    public let url: URL
+    /// Another device already showed it. Skip a one-off banner; a lasting row in Settings is fine.
+    public let shown: Bool
+}
+
+/// What the customer did with a ``ReviewPrompt``.
+public enum ReviewPromptAnswer: String, Sendable {
+    /// Hide it until the next milestone.
+    case later
+    /// They say they left a review. It isn't shown again.
+    case reviewed
+    /// They don't want to be asked. It isn't shown again.
+    case optedOut = "opted_out"
+}
+
 public enum SupportEvent: Hashable, Sendable {
     /// Chat content appeared, in the SDK sheet or a host-owned ``SupportChatView``.
     case chatOpened
@@ -77,6 +102,10 @@ public enum SupportEvent: Hashable, Sendable {
     case codeCopied
     /// A code card's Redeem was tapped, just before its redemption URL opens.
     case codeOpened
+    /// A link card's button opened its page or the app's Settings page (the system reported
+    /// success), or handed its screen to `onScreen`. `linkId` is the saved link the card came from,
+    /// nil for a one-off link.
+    case linkOpened(messageId: String, linkId: String?)
     /// `deleteData()` completed.
     case dataDeleted
     /// The server rejected the identity token from `identify(token:)`. The SDK dropped it and keeps
@@ -105,7 +134,8 @@ public struct SupportPaywall: Hashable, Sendable, Identifiable {
 
     /// Stable identifier, 1–64 characters of `[A-Za-z0-9_.-]`. Passed back to `onPaywall`.
     public var id: String
-    /// What agents see in the inbox, at most 60 characters. Customers never see it.
+    /// At most 60 characters. Agents pick the paywall by it in the inbox, and the offer card shows it
+    /// as its title.
     public var title: String
     /// Optional products so agents can see what the offer contains.
     public var products: [Product]
@@ -114,6 +144,21 @@ public struct SupportPaywall: Hashable, Sendable, Identifiable {
         self.id = id
         self.title = title
         self.products = products
+    }
+}
+
+/// A screen in your app that a link card can open, for example your profile or notification
+/// settings.
+public struct SupportScreen: Hashable, Sendable, Identifiable {
+    /// Stable identifier, 1–64 characters of `[A-Za-z0-9_.-]`. Passed back to `onScreen`.
+    public var id: String
+    /// What the team sees in the inbox, at most 60 characters. Customers see the card's button
+    /// label instead.
+    public var title: String
+
+    public init(id: String, title: String) {
+        self.id = id
+        self.title = title
     }
 }
 

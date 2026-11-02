@@ -29,7 +29,8 @@ struct EngineDependencies: @unchecked Sendable {
     }
 }
 
-/// The SDK's core: session, identity, device sync, unread state, paywalls, appearance and the chat.
+/// The SDK's core: session, identity, device sync, unread state, paywalls, screens, appearance and
+/// the chat.
 @MainActor
 final class SupportEngine {
     let appID: String
@@ -58,6 +59,10 @@ final class SupportEngine {
     private var paywallRefresh: Task<Void, Never>?
     private var paywallsResolved = false
 
+    // Screens
+    private(set) var screens: [SupportScreen] = []
+    private var screensResolved = false
+
     // Unread
     private(set) var unreadCount = 0
 
@@ -65,6 +70,8 @@ final class SupportEngine {
     var onUnreadChange: ((Int) -> Void)?
     var onChatVisibilityChange: ((Bool) -> Void)?
     var onDismissRequested: (() -> Void)?
+    /// Closes the SDK sheet, if it's showing, then runs the closure.
+    var onDismissThen: ((@escaping @MainActor () -> Void) -> Void)?
     var onOpenRequested: (() -> Void)?
     var isChatOpen: () -> Bool = { false }
     var onPaywallsChange: (([SupportPaywall]) -> Void)?
@@ -75,6 +82,11 @@ final class SupportEngine {
     private var debounce: Task<Void, Never>?
     private var observers: [NSObjectProtocol] = []
     private var loggedUnknownApp = false
+    /// When the server last sent config, and whether the next sync must read it again even if
+    /// nothing on the device changed (subscription restored, new tracked events…).
+    private var configFetchedAt: Date?
+    private var configRefreshDue = false
+    private static let configRefreshInterval: TimeInterval = 60
 
     let appearanceStore: AppearanceStore
     private(set) lazy var chat = ChatController(engine: self)
@@ -119,6 +131,7 @@ final class SupportEngine {
     func start() {
         appearanceStore.load()
         refreshPaywalls()
+        refreshScreens()
         guard deps.systemIntegration else { return }
         let center = NotificationCenter.default
         observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
@@ -145,6 +158,9 @@ final class SupportEngine {
         if deviceToken == nil {
             _ = try? await ensureRegistered()
         } else {
+            // Launch, and activation when the config is over a minute old: re-read it.
+            let stale = configFetchedAt.map { deps.now().timeIntervalSince($0) >= Self.configRefreshInterval } ?? true
+            if stale { configRefreshDue = true }
             await syncDevice()
         }
         if settings.usesRemoteAppearance {
@@ -208,7 +224,7 @@ final class SupportEngine {
         isDisabled = true
         if !loggedUnknownApp {
             loggedUnknownApp = true
-            Log.error("The App ID \(appID) doesn't exist. Check it in the Support Yaps inbox under Settings. The SDK is disabled until the next configure.")
+            Log.error("The App ID \(appID) doesn't exist. Check it in the Support Yaps inbox under App settings. The SDK is disabled until the next configure.")
         }
     }
 
@@ -365,7 +381,8 @@ final class SupportEngine {
             metadata: metadata,
             push: push,
             badgeEnabled: settings.updatesAppBadge,
-            paywalls: paywallsResolved ? availablePaywalls.map(Self.paywallInput) : synced?.paywalls
+            paywalls: paywallsResolved ? availablePaywalls.map(Self.paywallInput) : synced?.paywalls,
+            screens: screensResolved ? screens.map { ScreenInput(id: $0.id, title: $0.title) } : synced?.screens
         )
     }
 
@@ -391,6 +408,7 @@ final class SupportEngine {
         }
         if desired.badgeEnabled != (synced.badgeEnabled ?? true) { request.badgeEnabled = desired.badgeEnabled }
         if paywallsResolved, desired.paywalls != synced.paywalls { request.paywalls = desired.paywalls ?? [] }
+        if screensResolved, desired.screens != synced.screens { request.screens = desired.screens ?? [] }
         return request.isEmpty ? nil : request
     }
 
@@ -424,7 +442,8 @@ final class SupportEngine {
     }
 
     private func performSync() async {
-        guard deviceToken != nil, var request = pendingDeviceUpdate() else { return }
+        // An empty PATCH changes nothing and answers with the current config.
+        guard deviceToken != nil, var request = pendingDeviceUpdate() ?? (configRefreshDue ? DeviceUpdateRequest() : nil) else { return }
         for _ in 0..<2 {
             let desired = desiredSnapshot()
             let tokenSent = request.identity?.token
@@ -442,6 +461,7 @@ final class SupportEngine {
                 if request.push != nil { newSynced.push = desired.push }
                 if let badge = request.badgeEnabled { newSynced.badgeEnabled = badge }
                 if let paywalls = request.paywalls { newSynced.paywalls = paywalls }
+                if let screens = request.screens { newSynced.screens = screens }
                 synced = newSynced
                 persist()
                 return
@@ -462,6 +482,8 @@ final class SupportEngine {
     func apply(config: SdkConfig) {
         let previousEtag = self.config?.appearanceEtag
         self.config = config
+        configFetchedAt = deps.now()
+        configRefreshDue = false
         chat.configChanged()
         if settings.usesRemoteAppearance, let etag = config.appearanceEtag, etag != appearanceStore.etag, etag != previousEtag {
             Task { await appearanceStore.refresh() }
@@ -558,6 +580,28 @@ final class SupportEngine {
         settings.onPaywall != nil && availablePaywalls.contains { $0.id == id }
     }
 
+    // MARK: - Screens
+
+    func refreshScreens() {
+        screens = Validation.screens(settings.screens)
+        screensResolved = true
+        chat.screensChanged()
+        scheduleSync()
+    }
+
+    func isScreenAvailable(_ id: String) -> Bool {
+        settings.onScreen != nil && screens.contains { $0.id == id }
+    }
+
+    /// Closes the SDK sheet (a host-owned ``SupportChatView`` stays), then calls `onScreen`.
+    func openScreen(_ id: String, then done: (@MainActor () -> Void)? = nil) {
+        let open: @MainActor () -> Void = { [settings] in
+            settings.onScreen?(id)
+            done?()
+        }
+        if let onDismissThen { onDismissThen(open) } else { open() }
+    }
+
     // MARK: - Events (§3.6)
 
     func track(_ name: String, opensChat: Bool) {
@@ -584,6 +628,34 @@ final class SupportEngine {
             } catch {
                 Log.debug("track(\(name)) failed")
             }
+        }
+    }
+
+    // MARK: - In-app review prompt
+
+    func reviewPrompt() async -> ReviewPrompt? {
+        do {
+            let response: ReviewPromptResponse = try await authorized { token in
+                try await self.api.send(.get, "/v1/sdk/review-prompt", token: token)
+            }
+            return response.prompt
+        } catch {
+            Log.debug("reviewPrompt() failed")
+            return nil
+        }
+    }
+
+    /// Records a review prompt action; for `shown`, returns whether this device claimed it.
+    @discardableResult
+    func reviewPromptAction(_ action: String, milestone: Int) async -> Bool {
+        do {
+            let response: ReviewPromptActionResponse = try await authorized { token in
+                try await self.api.send(.post, "/v1/sdk/review-prompt", body: ReviewPromptActionRequest(action: action, milestone: milestone), token: token)
+            }
+            return response.claimed ?? true
+        } catch {
+            Log.debug("review prompt \(action) failed")
+            return false
         }
     }
 

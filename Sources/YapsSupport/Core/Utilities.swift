@@ -56,7 +56,8 @@ enum Validation {
     private static let identifierCharacters = CharacterSet(charactersIn:
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-")
 
-    /// 1–64 characters of `[A-Za-z0-9_.-]`, used for metadata keys, paywall IDs and event names.
+    /// 1–64 characters of `[A-Za-z0-9_.-]`, used for metadata keys, paywall and screen IDs and event
+    /// names.
     static func isIdentifier(_ value: String) -> Bool {
         guard (1...64).contains(value.count) else { return false }
         return value.unicodeScalars.allSatisfy { identifierCharacters.contains($0) }
@@ -101,6 +102,29 @@ enum Validation {
                 break
             }
             result.append(paywall)
+        }
+        return result
+    }
+
+    static func screens(_ input: [SupportScreen]) -> [SupportScreen] {
+        var seen = Set<String>()
+        var result: [SupportScreen] = []
+        for var screen in input {
+            screen.id = screen.id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard isIdentifier(screen.id) else {
+                Log.error("Screen \"\(screen.id)\" has an invalid ID (1–64 of A–Z a–z 0–9 _ . -); it was left out.")
+                continue
+            }
+            // Like the other SDKs and the server: a blank title becomes the ID, a long one is cut to 60.
+            let title = screen.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if title.count > 60 { Log.info("Screen \"\(screen.id)\" title is over 60 characters; it was cut to 60.") }
+            screen.title = title.isEmpty ? screen.id : String(title.prefix(60))
+            guard seen.insert(screen.id).inserted else { continue }
+            guard result.count < 50 else {
+                Log.error("More than 50 screens; the rest were left out.")
+                break
+            }
+            result.append(screen)
         }
         return result
     }

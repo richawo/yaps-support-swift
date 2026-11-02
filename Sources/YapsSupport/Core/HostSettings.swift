@@ -11,6 +11,8 @@ final class HostSettings {
     var paywalls: [SupportPaywall] = []
     var paywallAvailability: (@MainActor (String) async -> Bool)?
     var onPaywall: ((String) -> Void)?
+    var screens: [SupportScreen] = []
+    var onScreen: ((String) -> Void)?
     var onEvent: ((SupportEvent) -> Void)?
 
     init() {}
@@ -25,6 +27,7 @@ struct DeviceSnapshot: Codable, Equatable, Sendable {
     var push: PushInput?
     var badgeEnabled: Bool?
     var paywalls: [PaywallInput]?
+    var screens: [ScreenInput]?
 }
 
 /// Non-secret session state persisted between launches. The device token itself lives in the

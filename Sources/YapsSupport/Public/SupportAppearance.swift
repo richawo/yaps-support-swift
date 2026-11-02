@@ -17,9 +17,9 @@ public struct SupportAppearance: Sendable {
     public var accentColor: Color?
     /// Text and symbols drawn on accent surfaces. Default: white.
     public var onAccentColor: Color?
-    /// The chat background. Default: the system grouped background.
+    /// The chat background. Default: the system background.
     public var backgroundColor: Color?
-    /// Incoming bubbles and cards. Default: a system fill.
+    /// Incoming bubbles and cards. Default: the secondary system background.
     public var incomingBackgroundColor: Color?
     /// Incoming message text. Default: the primary label colour.
     public var incomingForegroundColor: Color?
